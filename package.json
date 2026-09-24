@@ -1,0 +1,29 @@
+{
+  "name": "radar-licitaciones",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "fase0": "node scripts/fase0/medir-mes.ts",
+    "motor": "node src/motor/ingestar.ts",
+    "extraer": "node src/motor/extraer.ts",
+    "revalidar": "node src/motor/revalidar.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1",
+    "fast-xml-parser": "^5.11.1",
+    "pg": "^8.23.0",
+    "unpdf": "^1.8.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
+    "typescript": "^7.0.2"
+  }
+}

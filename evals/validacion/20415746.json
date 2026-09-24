@@ -1,0 +1,3 @@
+{ "id": "20415746", "no_exige_solvencia": false, "volumen_eur": 50262, "seguro_rc_eur": null,
+  "certificaciones_obligatorias": ["ENS medio"], "certificaciones_puntuan": [], "clasificacion": [],
+  "notas": "Volumen >= 1,5 x valor anual medio = 50.262 € (p46, con tabla del cálculo). Habilitación empresarial: 'es necesario estar en posesión del certificado ENS en nivel Medio'. CORREGIDO: la primera anotación omitió el ENS; fallo del anotador, visto al revisar la cita del modelo." }

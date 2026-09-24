@@ -1,0 +1,3 @@
+{ "id": "20480972", "no_exige_solvencia": false, "volumen_eur": 80000, "seguro_rc_eur": null,
+  "certificaciones_obligatorias": ["ENS medio"], "certificaciones_puntuan": [], "clasificacion": [],
+  "notas": "ISDEFE. Volumen >= 80.000 € (p10). Certificado de Conformidad con el ENS categoría MEDIA como requisito necesario (p9), con ISO 27001 o equivalente como alternativa si no se tiene (p10)." }

@@ -1,0 +1,4 @@
+{ "id": "20416484", "no_exige_solvencia": false, "volumen_eur": 367538.67, "seguro_rc_eur": null,
+  "certificaciones_obligatorias": ["ISO 9001", "ISO 20000", "ISO 27001", "ISO 14001", "ENS medio"], "certificaciones_puntuan": [],
+  "clasificacion": [{ "grupo": "V", "subgrupo": "5", "categoria": "1", "sustituye": true }],
+  "notas": "Volumen 367.538,67 € (p7). Técnica: 85.759,02 € en V5. Certificados exigidos (p8): ISO 9001, 20000-1, 27001, 14001 y ENS de categoría media o alta. Clasificación V-5-1 alternativa a la solvencia (p8)." }

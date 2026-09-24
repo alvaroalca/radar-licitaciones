@@ -1,0 +1,3 @@
+{ "id": "20480450", "no_exige_solvencia": false, "volumen_eur": 60000, "seguro_rc_eur": null,
+  "certificaciones_obligatorias": ["Certificación de fabricante para mantener ODILO A3W"], "certificaciones_puntuan": [], "clasificacion": [],
+  "notas": "Volumen >= 60.000 € (p31). Deben disponer de certificación para mantener ODILO A3W Gestión de documentación (p31). Las casillas SI/NO de exención se pierden al extraer el texto, pero fija un criterio con cifra." }

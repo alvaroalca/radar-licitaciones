@@ -1,0 +1,3 @@
+{ "id": "20276223", "no_exige_solvencia": false, "volumen_eur": 162000, "seguro_rc_eur": null,
+  "certificaciones_obligatorias": ["Partner oficial de CEGID SMB", "ENS medio"], "certificaciones_puntuan": [], "clasificacion": [],
+  "notas": "Volumen en el ámbito >= 1,5 x valor anual medio (p34), sin cifra escrita: VE 432.000 € = 216.000 € a 24 meses + 24 de prórroga -> 108.000 €/año -> 162.000 €. Solvencia técnica: 'Disponer de las siguientes certificaciones de seguridad': partner oficial de CEGID SMB y 'ENS Nivel Medio o ISO27001' (se anota como ENS medio; el formato no admite el 'o'). CORREGIDO: la primera anotación omitió las certificaciones; fallo del anotador, visto al revisar la cita del modelo." }

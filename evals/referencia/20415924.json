@@ -1,0 +1,3 @@
+{ "id": "20415924", "no_exige_solvencia": false, "volumen_eur": 105000, "seguro_rc_eur": null,
+  "certificaciones_obligatorias": ["ISO 9001"], "certificaciones_puntuan": [], "clasificacion": [],
+  "notas": "Volumen >= 1,5 x valor anual medio (p6), sin cifra escrita: VE 140.000 € con prórroga = 2 años -> 70.000 €/año -> 105.000 €. La referencia legal del radar usa la duración inicial del feed (12 meses) y daría 210.000 €: se pasa. ISO 9001 exigida como solvencia técnica (p7)." }
