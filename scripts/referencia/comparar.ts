@@ -18,7 +18,7 @@
 // absoluta: un pliego puede decir en otra página lo que aquí no aparece.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import pg from 'pg'
-import { certificacion, evaluar, type Veredicto } from '../../web/src/lib/encaje'
+import { certificacion, esVolumen, evaluar, type Veredicto } from '../../web/src/lib/encaje'
 import { PERFILES_DEMO } from '../../web/src/lib/perfil'
 import type { Lectura, Requisitos } from '../../web/src/lib/supabase'
 
@@ -59,7 +59,7 @@ const casi = (a: number, b: number) => Math.abs(a - b) <= Math.max(1, 0.01 * Mat
 function volumenModelo(req: Requisitos) {
   const eco = req.solvencia_economica ?? []
   const noExige = eco.some((s) => /no se exig|no sera exigible|exento|exime/.test(sinTildes(`${s.medio} ${s.descripcion}`)))
-  const umbrales = eco.filter((s) => s.umbral_eur != null && /volumen|cifra|negocio|facturaci/.test(sinTildes(`${s.medio} ${s.descripcion}`)))
+  const umbrales = eco.filter(esVolumen)
   return { noExige, volumen: umbrales.length ? Math.max(...umbrales.map((s) => s.umbral_eur!)) : null }
 }
 const seguroModelo = (req: Requisitos) => {

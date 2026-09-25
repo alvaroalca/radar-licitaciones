@@ -44,7 +44,7 @@ function subgrupoValido(s: unknown): string | null | false {
   return m ? m[2] : false
 }
 
-const CERTIFICACION = /\b(iso|iec|une|en)[ /-]?\d{3,5}|esquema nacional de seguridad|\bens\b|\bitil\b|\bcmmi\b|\bpmp\b|\bcissp\b|\bccna\b|partner|certificaci[oó]n (del |de |oficial |para )?(fabricante|mantener|dar mantenimiento|oficial)|acreditaci[oó]n como|nivel (alto|medio|basico) del ens/
+const CERTIFICACION = /\b(iso|iec|une|en)[ /-]?\d{3,5}|esquema nacional de seguridad|\bens\b|\bitil\b|\bcmmi\b|\bpmp\b|\bcissp\b|\bccna\b|partner|certificaci[oó]n (del |de |oficial |para )?(fabricante|mantener|dar mantenimiento|oficial)|acreditaci[oó]n como|nivel (alto|medio|basico) del ens|certificaci[oó]n para|certificado del fabricante|(distribuidor|integrador|socio|colaborador) (autorizado|oficial|certificado)|autorizaci[oó]n del fabricante|\b(gold|silver|platinum)\b|pci[ -]?dss|habilitaci[oó]n de seguridad|\bhse[ms]\b|\bccn\b/
 
 // El nombre de la certificación tiene que estar en su cita o en la página citada. Visto en la
 // validación del 24/09/2026: "ISO 9001" colgada de una cita real que hablaba de otra cosa (el
@@ -53,19 +53,22 @@ const CERTIFICACION = /\b(iso|iec|une|en)[ /-]?\d{3,5}|esquema nacional de segur
 // siguiente (ISO 14001, ENS medio y ODILO, en la misma validación).
 const PALABRAS_VACIAS = new Set(['certificacion', 'certificado', 'certificada', 'acreditacion', 'oficial', 'empresa', 'sistema', 'gestion', 'partner', 'nivel', 'categoria', 'para', 'como', 'con', 'del', 'las', 'los'])
 function respaldada(nombre: string, cita: string, pagina: string) {
-  const c = sinTildes(`${cita} ${pagina}`)
+  const c = sinTildes(`${cita} ${pagina}`).replace(/\s+/g, ' ')
   const numeros = nombre.match(/\d{4,5}/g)
   if (numeros) return numeros.some((n) => c.includes(n))
-  if (/esquema nacional de seguridad|\bens\b/.test(nombre)) return /esquema nacional de seguridad|\bens\b/.test(c)
+  if (/esquema nacional de seguridad|\bens\b/.test(nombre)) return /esquema nacional de seguridad|\bens\b|\be\.n\.s\b/.test(c)
   const palabras = nombre.split(/[^a-z0-9]+/).filter((p) => p.length >= 4 && !PALABRAS_VACIAS.has(p))
   return !palabras.length || palabras.some((p) => c.includes(p))
 }
 const NO_CERTIFICACION = /seguro|poliza|responsabilidad civil|rolece|registro|declaracion responsable|inscripcion/
 const SEGURO = /seguro|poliza|responsabilidad civil/
+const PERSONAL = /\bitil\b|\bpmp\b|prince ?2|\bcissp\b|\bcism\b|\bcisa\b|\bccn[ap]\b|scrum|\bipma\b|comptia|microsoft certified|aws certified/
 // El ENS se menciona en casi todos los pliegos (protección de datos, RD 311/2022) sin pedir
 // que la empresa esté certificada: solo cuenta si se habla de certificación o conformidad
 const ENS = /esquema nacional de seguridad|\bens\b/
-const CERTIFICARSE = /certific|conformidad|acredit|distintivo/
+// Con un lector que cita la frase que exige ("deberán estar en posesión de…"), la obligación
+// también cuenta como pedir la certificación
+const CERTIFICARSE = /certific|conformidad|acredit|distintivo|posesion|disponer|exig|debera/
 
 type Veredicto = { campo: Campo; elemento: Elemento } | { descartar: string }
 
@@ -76,6 +79,18 @@ function validarForma(campo: Campo, e: Elemento, pagina: string): Veredicto {
       if (!grupo) return { descartar: `grupo "${e.grupo}" no es un grupo de clasificación` }
       const subgrupo = subgrupoValido(e.subgrupo)
       if (subgrupo === false) return { descartar: `subgrupo "${e.subgrupo}" no es un subgrupo de clasificación` }
+      // El rótulo del apartado no es la clasificación. Visto en el segundo lote a ciegas
+      // (24/09/2026): "F1 CLASIFICACIÓN" leído como grupo F, subgrupo 1, con la tabla vacía.
+      const cita = sinTildes(e.cita)
+      const g = grupo.toLowerCase()
+      if (new RegExp(`apartado\\s+${g}\\b|\\b${g}\\.?\\s?${subgrupo ?? ''}\\.?\\s*[-–:]?\\s*clasificacion`).test(cita)) {
+        return { descartar: `"${grupo}${subgrupo ?? ''}" es el rótulo de un apartado, no una clasificación` }
+      }
+      // El grupo puede venir en la línea siguiente a la frase que admite la clasificación; en
+      // algunos PDF las letras llegan separadas por espacios ("G r u p o V")
+      if (!/grupo|clasificacion/.test(sinTildes(`${cita} ${pagina}`).replace(/\s/g, ''))) {
+        return { descartar: `ni la cita ni su página hablan de clasificación` }
+      }
       return { campo, elemento: { ...e, grupo, subgrupo } }
     }
     case 'certificaciones_exigidas': {
@@ -87,18 +102,28 @@ function validarForma(campo: Campo, e: Elemento, pagina: string): Veredicto {
           elemento: { medio: e.nombre, umbral_eur: null, descripcion: e.nombre, pagina: e.pagina, cita: e.cita },
         }
       }
+      // ITIL, PMP y compañía certifican a personas, no a la empresa: son adscripción de medios.
+      // Visto en el segundo lote a ciegas: "ITIL" de los técnicos exigida como si fuera de la empresa.
+      if (PERSONAL.test(nombre)) {
+        return {
+          campo: 'adscripcion_medios',
+          elemento: { perfil: 'Personal certificado', requisitos: e.nombre, pagina: e.pagina, cita: e.cita },
+        }
+      }
       if (NO_CERTIFICACION.test(nombre) || !CERTIFICACION.test(nombre)) {
         return { descartar: `"${e.nombre}" no es una certificación reconocible` }
       }
       // Tres o más cosas en un nombre es una lista, no una certificación. Visto: el modelo
       // copió la lista de ejemplo de sus propias instrucciones.
-      if (nombre.split(/,|;|\s+y\s+/).filter((t) => t.trim()).length >= 3) {
+      if (nombre.replace(/\([^)]*\)/g, '').split(/,|;|\s+y\s+/).filter((t) => t.trim()).length >= 3) {
         return { descartar: `"${e.nombre}" es una lista, no una certificación` }
       }
       if (ENS.test(nombre) && !CERTIFICARSE.test(`${nombre} ${sinTildes(e.cita)}`)) {
         return { descartar: `"${e.nombre}": el pliego menciona el ENS pero no pide certificarse` }
       }
-      if (!respaldada(nombre, e.cita, pagina)) {
+      // Sin el paréntesis aclaratorio: "ENS medio (admite ISO 27001 como alternativa)" no tiene
+      // que encontrar el 27001 en la página del ENS
+      if (!respaldada(nombre.replace(/\([^)]*\)/g, ''), e.cita, pagina)) {
         return { descartar: `"${e.nombre}" no aparece ni en su cita ni en su página` }
       }
       return { campo, elemento: e }
@@ -139,9 +164,12 @@ export function depurar(propuesta: Requisitos, paginas: string[]) {
       const q = normalizar(propuesto.cita)
       // Una cita demasiado corta ("sí", "5%", "15.7.3") casa en cualquier parte y no prueba nada
       if (q.length < 15) { descartados.push(`${donde}: cita demasiado corta "${propuesto.cita}"`); continue }
-      // Un modelo pequeño a veces repite el mismo elemento en bucle
-      if (vistas.has(campoPropuesto + q)) { descartados.push(`${donde}: repetido`); continue }
-      vistas.add(campoPropuesto + q)
+      // Un modelo pequeño a veces repite el mismo elemento en bucle. El nombre entra en la clave:
+      // varias certificaciones pueden colgar de la misma frase que las exige (visto el 25/09/2026)
+      const nombre = normalizar(String(propuesto.nombre ?? propuesto.medio ?? propuesto.perfil ?? propuesto.grupo ?? ''))
+      const clave = `${campoPropuesto}|${q}|${nombre}`
+      if (vistas.has(clave)) { descartados.push(`${donde}: repetido`); continue }
+      vistas.add(clave)
 
       let e = propuesto
       if (similitud(q, norm[e.pagina - 1] ?? '') < UMBRAL_CITA) {

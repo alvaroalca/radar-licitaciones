@@ -72,9 +72,9 @@ Recibes solo las páginas relevantes del pliego, cada una con su etiqueta <pagin
 
 Qué va en cada lista:
 - solvencia_economica / solvencia_tecnica: los medios con los que el licitador acredita solvencia y su umbral (cifra de negocio mínima, seguro de responsabilidad civil, trabajos similares en los últimos años...). Si el pliego dice que no se exige solvencia, un solo elemento que lo diga. Los criterios que dan puntos no son solvencia.
-- clasificacion_empresarial: grupo, subgrupo y categoría, solo si el pliego los indica.
-- certificaciones_exigidas: solo certificados de calidad, seguridad o sector (ISO 9001, ISO 27001, Esquema Nacional de Seguridad, certificaciones de fabricante...). Las declaraciones responsables y los registros no son certificaciones.
-- adscripcion_medios: solo el personal o los medios concretos que el adjudicatario debe dedicar al contrato (perfiles, titulación, experiencia). La capacidad genérica para contratar no va aquí.
+- clasificacion_empresarial: grupo, subgrupo y categoría, solo si el pliego los indica. Los rótulos de apartados del cuadro ("F1 CLASIFICACIÓN", "Apartado F") no son grupos. "sustituye_solvencia" es true si la clasificación es una alternativa a acreditar la solvencia, y false solo si el pliego la exige.
+- certificaciones_exigidas: solo certificados de calidad, seguridad o sector que debe tener la empresa (ISO 9001, ISO 27001, Esquema Nacional de Seguridad, certificaciones de fabricante...). Las declaraciones responsables y los registros no son certificaciones. Las certificaciones del personal (ITIL, PMP, CISSP...) van en adscripcion_medios. La cita de cada certificación es la frase que la exige ("deberán estar en posesión de…"), aunque el nombre de la norma venga en la línea siguiente: sin esa frase no se sabe si es obligatoria o solo puntúa.
+- adscripcion_medios: solo el personal o los medios concretos que el adjudicatario debe dedicar al contrato (perfiles, titulación, experiencia, certificaciones del personal). La capacidad genérica para contratar no va aquí.
 - criterios_adjudicacion: los criterios principales con su peso. Si un criterio tiene subcriterios, solo el principal con su peso total.`
 
 type RespuestaOllama = {
@@ -125,18 +125,30 @@ export type Extraccion = {
   esquemaValido: boolean
 }
 
-export async function extraer(titulo: string, paginas: string[], conCriterios: boolean): Promise<Extraccion> {
+// El pliego tal como lo ve el lector: solo las páginas elegidas, cada una con su número
+export function componer(titulo: string, paginas: string[]) {
   const seleccion = seleccionarPaginas(paginas, TOKENS_PLIEGO)
-  const pliego = `<pliego titulo="${titulo.replace(/"/g, "'")}">\n${seleccion.paginas
+  const texto = `<pliego titulo="${titulo.replace(/"/g, "'")}">\n${seleccion.paginas
     .map((n) => `<pagina n="${n}">\n${paginas[n - 1].replace(/[ \t]+/g, ' ').trim()}\n</pagina>`)
     .join('\n')}\n</pliego>`
+  return { texto, paginas: seleccion.paginas }
+}
 
+// La propuesta pasa por el código igual venga de donde venga: citas y forma de cada campo
+function cerrar(propuesta: Requisitos, paginas: string[], paginasEnviadas: number[]) {
+  const { requisitos, descartados } = depurar(propuesta, paginas)
+  const contar = (r: Requisitos) => Object.values(r).reduce((n, xs) => n + (xs?.length ?? 0), 0)
+  return { requisitos, propuesta, descartados, propuestos: contar(propuesta), aceptados: contar(requisitos), paginasEnviadas }
+}
+
+export async function extraer(titulo: string, paginas: string[], conCriterios: boolean): Promise<Extraccion> {
+  const pliego = componer(titulo, paginas)
   const propuesta: Partial<Record<Campo, Elemento[]>> = {}
   let esquemaValido = true
   let segundos = 0
   let tokensSalida = 0
   for (const campos of bloques(conCriterios)) {
-    const r = await pedir(pliego, z.toJSONSchema(objeto(campos)))
+    const r = await pedir(pliego.texto, z.toJSONSchema(objeto(campos)))
     segundos += r.total_duration / 1e9
     tokensSalida += r.eval_count
     let json: unknown = null
@@ -145,18 +157,33 @@ export async function extraer(titulo: string, paginas: string[], conCriterios: b
     if (parseada.success) Object.assign(propuesta, parseada.data)
     else esquemaValido = false
   }
+  return { ...cerrar(propuesta, paginas, pliego.paginas), segundos: +segundos.toFixed(1), tokensSalida, esquemaValido }
+}
 
-  const { requisitos, descartados } = depurar(propuesta, paginas)
-  const propuestos = Object.values(propuesta).reduce((n, xs) => n + (xs?.length ?? 0), 0)
-  return {
-    requisitos,
-    propuesta,
-    descartados,
-    propuestos,
-    aceptados: Object.values(requisitos).reduce((n, xs) => n + (xs?.length ?? 0), 0),
-    paginasEnviadas: seleccion.paginas,
-    segundos: +segundos.toFixed(1),
-    tokensSalida,
-    esquemaValido,
+// --- Lector externo ----------------------------------------------------------------
+// El lector puede ser cualquier LLM, no solo el local: el motor deja el pliego preparado en
+// un fichero, el lector escribe su propuesta en JSON con el mismo esquema y el motor la
+// importa. Lo que decide (citas, validadores, encaje) no cambia.
+
+export function instrucciones(conCriterios: boolean) {
+  const campos = Object.keys(CAMPOS).filter((c) => conCriterios || c !== 'criterios_adjudicacion') as Campo[]
+  return `${SISTEMA}\n\nDevuelve este JSON:\n${JSON.stringify(z.toJSONSchema(objeto(campos)))}`
+}
+
+// Cada campo se valida por separado: un campo mal formado no tira los demás
+export function importar(json: Record<string, unknown>, paginas: string[], paginasEnviadas: number[]) {
+  const propuesta: Requisitos = {}
+  const invalidos: string[] = []
+  for (const [campo, valor] of Object.entries(json)) {
+    if (!(campo in CAMPOS)) { invalidos.push(campo); continue }
+    // Los topes de longitud son contra los bucles de un modelo pequeño: aquí se recorta
+    const recortado = Array.isArray(valor)
+      ? valor.map((e) => Object.fromEntries(Object.entries(e ?? {}).map(([k, v]) =>
+        [k, typeof v === 'string' ? v.slice(0, k === 'cita' ? 200 : k === 'descripcion' || k === 'requisitos' ? 300 : 120) : v])))
+      : valor
+    const r = CAMPOS[campo as Campo].safeParse(recortado)
+    if (r.success) propuesta[campo as Campo] = r.data as Elemento[]
+    else invalidos.push(campo)
   }
+  return { ...cerrar(propuesta, paginas, paginasEnviadas), invalidos }
 }

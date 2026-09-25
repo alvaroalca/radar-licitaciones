@@ -6,7 +6,11 @@ Radar de licitaciones públicas para PYMEs: lee el feed abierto de la Plataforma
 
 - **Stack:** React (Vite) + Node en TypeScript. Node 24 ejecuta `.ts` directamente, sin build: los imports llevan extensión `.ts` y solo vale sintaxis borrable (`erasableSyntaxOnly`).
 - **El LLM lee, el código decide.** El LLM extrae campos del pliego, cada uno con la página de donde sale. El "encaja / no encaja" lo calculan reglas deterministas. Evals con pliegos anotados a mano, incluido un control negativo: un dato que el pliego no pide sale `null`, nunca inventado.
-- **LLM local con Ollama, sin API de pago** (decisión de Álvaro). Modelo de trabajo: `qwen3:4b`, que cabe entero en los 8 GB de la RTX 3070 Ti. Al pliego no se le manda entero: se seleccionan sus páginas relevantes (`src/pliegos/paginas.ts`). Números y trampas de Ollama en `docs/STATUS.md`.
+- **El lector es el LLM que prefiera cada cual** (25/09/2026). Hay dos vías:
+  - En directo con Ollama (`qwen3:4b` cabe en 8 GB). Números y trampas en `docs/STATUS.md`.
+  - Con cualquier otro LLM, en dos pasos: `--preparar` deja instrucciones y páginas en `data/lectura/<id>.txt`, el lector escribe `<id>.json` y `--importar` lo valida y lo guarda.
+  - **En este proyecto lee Claude**, para no cargar la GPU de Álvaro, con `node scripts/lector/claude.ts`: una llamada `claude -p` por pliego. **Nunca con subagentes en lote**, que reenvían su contexto en cada turno y gastaron unas 30 veces lo necesario (25/09/2026). La promo y el portfolio dicen que el LLM es intercambiable.
+  - Al pliego no se le manda entero: se seleccionan sus páginas relevantes (`src/pliegos/paginas.ts`).
 - **Alcance v1:** servicios TI (CPV 72 y 48), toda España.
 - **Escaparate siempre encendido, motor encendible.** La web es estática y lee de Supabase en solo lectura, así que funciona con el motor apagado. El motor (Node: ingesta y lectura de pliegos) se enciende cuando se quiere y al arrancar retoma desde la última actualización vista.
 - **Base de datos:** esquema `licitaciones` en `alcaten-dev`, con su propio rol de Postgres. Nada en `public`.
@@ -37,6 +41,8 @@ Radar de licitaciones públicas para PYMEs: lee el feed abierto de la Plataforma
 npm run motor                 # ingesta: mes en curso (y el anterior si nunca se ingirió)
 npm run motor -- 202608       # meses concretos
 npm run extraer               # lee con Ollama los pliegos de hasta 20 abiertas (--limite=N, --id=X)
+npm run extraer -- --preparar --limite=300   # otro LLM, paso 1: data/lectura/<id>.txt
+npm run extraer -- --importar                # paso 2: valida y guarda data/lectura/<id>.json (--modelo=…, por defecto claude-opus-5-5)
 npm run revalidar             # reaplica los validadores a lo ya leído, sin GPU
 cd web && npm run dev         # la web en local
 npm run fase0 -- 202608 40   # mide un mes y una muestra de 40 pliegos TI → data/fase0/

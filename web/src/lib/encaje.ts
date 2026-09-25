@@ -1,6 +1,6 @@
 // ¿Puede esta empresa presentarse a esta licitación? Reglas deterministas: el modelo solo
 // aportó los datos del pliego (con su cita); el veredicto lo calcula este código.
-import type { Fila, Lectura } from './supabase'
+import type { Fila, Lectura, Requisitos } from './supabase'
 import type { Perfil } from './perfil'
 import { importe } from './formato'
 
@@ -38,6 +38,14 @@ export function referenciaLegal(d: Datos): number | null {
   return m <= 12 ? 1.5 * d.valor_estimado : (1.5 * d.valor_estimado) / (m / 12)
 }
 
+// Umbral de volumen de negocios. El medio manda: "Patrimonio neto" con una descripción que dice
+// "no se pide volumen anual de negocios" no es volumen (visto el 25/09/2026, 20248517)
+type Economica = NonNullable<Requisitos['solvencia_economica']>[number]
+const OTRO_MEDIO = /patrimonio|fondos propios|recursos propios|seguro|poliza|responsabilidad civil/
+export const esVolumen = (s: Economica) =>
+  s.umbral_eur != null && !OTRO_MEDIO.test(sinTildes(s.medio))
+  && /volumen|cifra|negocio|facturaci/.test(sinTildes(`${s.medio} ${s.descripcion}`))
+
 function volumen(d: Datos, x: Lectura | null, perfil: Perfil): Comprobacion {
   const tema = 'Volumen de negocio'
   const eco = x?.estado === 'hecha' ? x.requisitos.solvencia_economica ?? [] : []
@@ -47,7 +55,7 @@ function volumen(d: Datos, x: Lectura | null, perfil: Perfil): Comprobacion {
     return { tema, estado: 'ok', texto: 'El pliego no exige solvencia económica.', fuente: sinSolvencia }
   }
 
-  const umbrales = eco.filter((s) => s.umbral_eur != null && /volumen|cifra|negocio|facturaci/.test(sinTildes(`${s.medio} ${s.descripcion}`)))
+  const umbrales = eco.filter(esVolumen)
   if (umbrales.length) {
     const mayor = umbrales.reduce((a, b) => (b.umbral_eur! > a.umbral_eur! ? b : a))
     const pide = `El pliego pide ${importe(mayor.umbral_eur)} de volumen anual de negocios`
@@ -95,7 +103,7 @@ const tiene = (perfil: Perfil, id: string) =>
 // La obligación se mira antes que la puntuación: "requisito necesario… de acuerdo con la
 // valoración de las dimensiones de seguridad" es obligatorio aunque diga "valoración"
 // (visto en la validación del 24/09/2026).
-const OBLIGA = /deber[a]n?\b|debe\b|exig|acredit|obligatori|requisito|requerid|se requiere|imprescindible|necesari|disponer|en posesion|habra de|condicion especial/
+const OBLIGA = /deber[a]n?\b|debe\b|exig|acredit|obligatori|requisito|requerid|se requiere|imprescindible|necesari|dispon(er|ga|gan)\b|en posesion|habra de|condicion especial/
 const PUNTUA = /\bpuntos?\b|se valorara|\bmejoras?\b|criterios? de adjudicacion/
 
 function certificaciones(x: Lectura | null, perfil: Perfil): Comprobacion[] {
@@ -123,6 +131,12 @@ const categoria = (c: string | null) => {
   return /^[A-F]$/.test(t) ? t.charCodeAt(0) - 64 : Number(t) || 0
 }
 
+// En servicios y suministros la clasificación no es exigible (LCSP art. 77.1 b): casi siempre es
+// una alternativa a acreditar la solvencia. Solo da "no llegas" si la cita dice que es obligatoria.
+// Visto en el segundo lote a ciegas: una J-2 alternativa marcada como exigida tumbaba a los tres perfiles.
+const CLASIFICACION_OBLIGATORIA = /exigible|obligatori/
+const NO_OBLIGATORIA = /no (es |sera |resulta |se )?(exigible|obligatori)/
+
 function clasificaciones(x: Lectura | null, perfil: Perfil): Comprobacion[] {
   if (x?.estado !== 'hecha') return []
   return (x.requisitos.clasificacion_empresarial ?? []).map((c) => {
@@ -131,7 +145,9 @@ function clasificaciones(x: Lectura | null, perfil: Perfil): Comprobacion[] {
       p.grupo.toUpperCase() === c.grupo.toUpperCase()
       && (!c.subgrupo || p.subgrupo === c.subgrupo.trim())
       && categoria(p.categoria) >= categoria(c.categoria))
-    if (c.sustituye_solvencia) {
+    const cita = sinTildes(c.cita)
+    const obligatoria = CLASIFICACION_OBLIGATORIA.test(cita) && !NO_OBLIGATORIA.test(cita)
+    if (c.sustituye_solvencia || !obligatoria) {
       return {
         tema: 'Clasificación', estado: 'info' as const, fuente: c,
         texto: cubierta ? `${pide}: la tienes y te ahorra acreditar solvencia.` : `${pide}: opcional, sustituye a la solvencia.`,

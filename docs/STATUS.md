@@ -1,6 +1,53 @@
 # STATUS — Radar de licitaciones
 
-Actualizado: 2026-09-24
+Actualizado: 2026-09-25
+
+## Lector intercambiable: ahora lee Claude (25/09/2026)
+
+- [x] **El lector es el LLM que prefiera cada cual.** Además de Ollama en directo, el motor funciona en dos pasos: `npm run extraer -- --preparar` deja las instrucciones y las páginas en `data/lectura/<id>.txt`; el lector escribe `<id>.json` y `--importar` lo pasa por los mismos validadores. En este proyecto lee Claude, con subagentes en lotes de 10, para no cargar la GPU.
+- [x] Se relee lo que leyó otro modelo: la consulta de pendientes incluye las lecturas con `modelo` distinto.
+- [x] **Leídas por Claude las 266 abiertas con pliego legible** (hay 272 abiertas). Se aceptan 1.115 de 1.134 requisitos propuestos (98 %); con qwen eran 177 de 210.
+- [x] **Validadores que solo servían para qwen y tiraban datos buenos de Claude**, ya corregidos:
+  - el ENS se descartaba cuando la cita era la frase que lo exige ("en posesión de") y no decía "certificación";
+  - no se reconocían las certificaciones de fabricante ni las habilitaciones: partner Gold o Silver, distribuidor autorizado, autorización del fabricante, CCN, HSEM y HSES, PCI-DSS;
+  - varias certificaciones que cuelgan de la misma frase se tomaban por repetidas;
+  - un paréntesis aclaratorio en el nombre lo convertía en "lista";
+  - el grupo de clasificación en la línea siguiente a la cita hacía descartarlo;
+  - "E.N.S." escrito con puntos no contaba como ENS.
+- [x] **Encaje con los tres perfiles, 266 abiertas:**
+
+  | Perfil | Encajas | Revisar | No llegas |
+  |---|---|---|---|
+  | Estudio web | 103 | 64 | 99 |
+  | Consultora de ciberseguridad | 200 | 49 | 17 |
+  | Integrador grande | 230 | 36 | 0 |
+- [x] **Reglas del segundo lote a ciegas aplicadas:**
+  - la clasificación solo da "no llegas" si la cita dice "exigible" u "obligatoria";
+  - se descartan los grupos sacados de rótulos ("apartado F", "F1 CLASIFICACIÓN");
+  - las certificaciones de personal (ITIL, PMP…) pasan a adscripción de medios.
+  - Con qwen, el veredicto en ese lote pasa de 7/8/8 a 9/11/11 (ya no es ciego).
+- [x] **Encaje:** el volumen de negocios se decide por el medio. Un "Patrimonio neto" cuya descripción dice "no se pide volumen" se tomaba por volumen.
+- **Lo que ven los lectores y no se arregla leyendo mejor:**
+  - pliegos tipo sin rellenar (Generalitat Valenciana, Valladolid);
+  - remisiones al cuadro resumen, que no está entre las páginas enviadas;
+  - páginas clave que el selector deja fuera (perfiles, solvencia técnica);
+  - un PDF con las fuentes ilegibles;
+  - un DEUC en blanco descargado en lugar del PCAP (20496792);
+  - CPV de TI en contratos que no lo son (climatización, puntos de recarga).
+
+  Unos 15 pliegos salen vacíos o casi vacíos por estas causas.
+
+  El tope de 10 k tokens del selector venía de qwen. Con Claude se puede subir.
+- ⚠️ **Los bancos de evals ya no miden a ciegas:** las referencias las anotó Claude y ahora también lee Claude.
+  - Veredictos iguales: 23-25/25, 11/12 y 11/12.
+  - Los desacuerdos son requisitos reales que la referencia no anotó y Claude sí (distribuidor Fortinet, HSEM, que dan "revisar"), o los casos ambiguos de la referencia ("exime de acreditar").
+  - Para una cifra publicable hace falta anotar a mano, fuera de Claude.
+- ⚠️ **Coste:** los subagentes en lotes de 10 reenviaban cada pliego en todos los turnos siguientes. Salieron unos 100 M de tokens procesados para 3 M útiles, y se agotaron dos ventanas de 5 horas. El lector nuevo es `scripts/lector/claude.ts`: una llamada `claude -p` sin herramientas por pliego (~13 k de entrada). **Sin probar**, porque el login OAuth de la CLI había caducado: hay que ejecutar `claude` y `/login` en una terminal.
+- **Pendiente:**
+  - probar `node scripts/lector/claude.ts --id=20481053` y mirar el consumo real;
+  - releer con la instrucción nueva (cita = la frase que la exige) las primeras 155 lecturas que traen certificaciones: algunas obligatorias se quedan en "revisar";
+  - decidir si se sube el tope de páginas (10 k tokens venía de qwen);
+  - averiguar por qué llegan un DEUC y plantillas sin rellenar como si fueran el PCAP.
 
 ## Fase actual: 1, ingesta y listado
 
